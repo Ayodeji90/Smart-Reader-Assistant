@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Smart Reader Assistant — Helping visually impaired users read printed text independently using camera-based OCR and text-to-speech.">
+    <title>Smart Reader Assistant</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-link" id="skipLink">Skip to main content</a>
+
+    <div class="app-container">
+        <header role="banner">
+            <div class="logo-row">
+                <div class="logo-icon" aria-hidden="true">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                        <circle cx="18" cy="18" r="16" stroke="url(#grad1)" stroke-width="2.5"/>
+                        <path d="M12 18 C12 14, 14 11, 18 11 C22 11, 24 14, 24 18" stroke="url(#grad1)" stroke-width="2" fill="none" stroke-linecap="round"/>
+                        <circle cx="18" cy="18" r="3" fill="url(#grad1)"/>
+                        <defs>
+                            <linearGradient id="grad1" x1="0" y1="0" x2="36" y2="36">
+                                <stop offset="0%" stop-color="#BB86FC"/>
+                                <stop offset="100%" stop-color="#81D4FA"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1>Smart Reader</h1>
+            </div>
+            <p>Capture or upload text — hear it read aloud instantly.</p>
+        </header>
+
+        <main id="main-content" role="main">
+            <!-- Source Selection Tabs -->
+            <div class="source-tabs" role="tablist" aria-label="Image source selection">
+                <button class="tab active" role="tab" id="tabCamera" aria-selected="true" aria-controls="cameraPanel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span>Camera</span>
+                </button>
+                <button class="tab" role="tab" id="tabUpload" aria-selected="false" aria-controls="uploadPanel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <span>Upload</span>
+                </button>
+            </div>
+
+            <!-- Camera Panel -->
+            <div class="panel active" id="cameraPanel" role="tabpanel" aria-labelledby="tabCamera">
+                <div class="camera-container">
+                    <video id="cameraPreview" autoplay playsinline aria-label="Camera preview"></video>
+                    <div class="overlay" id="statusOverlay">
+                        <div class="overlay-content">
+                            <div class="spinner" id="spinner" aria-hidden="true"></div>
+                            <span id="statusText">Initializing Camera...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="capture-controls">
+                    <button id="captureBtn" class="btn btn-primary btn-capture" aria-label="Capture image and extract text" disabled>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="5" fill="currentColor"/>
+                        </svg>
+                        <span>Read Text</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Upload Panel -->
+            <div class="panel" id="uploadPanel" role="tabpanel" aria-labelledby="tabUpload" hidden>
+                <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Click or drag and drop an image to upload">
+                    <div class="upload-icon" aria-hidden="true">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <p class="upload-text">Drag & drop an image here</p>
+                    <p class="upload-subtext">or click to browse (JPG, PNG — max 10MB)</p>
+                    <input type="file" id="fileInput" accept="image/jpeg,image/png,image/bmp,image/webp" hidden aria-label="Select image file">
+                </div>
+                <!-- Upload preview -->
+                <div id="uploadPreview" class="upload-preview hidden">
+                    <img id="previewImage" alt="Uploaded image preview">
+                    <button id="removeImage" class="btn-icon" aria-label="Remove uploaded image">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="capture-controls">
+                    <button id="uploadBtn" class="btn btn-primary" aria-label="Extract text from uploaded image" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+                            <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+                        </svg>
+                        <span>Extract Text</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Processing Indicator -->
+            <div id="processingBar" class="processing-bar hidden" role="status" aria-live="polite">
+                <div class="processing-fill" id="processingFill"></div>
+                <span class="processing-label" id="processingLabel">Processing...</span>
+            </div>
+
+            <!-- Result Section -->
+            <div id="resultContainer" class="result-container hidden" aria-live="polite">
+                <div class="result-header">
+                    <h2>Extracted Text</h2>
+                    <div class="result-actions">
+                        <button id="downloadBtn" class="btn-icon" aria-label="Download extracted text" title="Download text">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
+                        <button id="copyBtn" class="btn-icon" aria-label="Copy text to clipboard" title="Copy text">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="scroll-area">
+                    <p id="resultText"></p>
+                </div>
+            </div>
+
+            <!-- Audio Player -->
+            <div id="audioPlayer" class="audio-player hidden" aria-label="Audio playback controls">
+                <div class="audio-progress-container" id="audioProgressContainer" role="slider" aria-label="Audio progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+                    <div class="audio-progress-bar" id="audioProgressBar"></div>
+                </div>
+                <div class="audio-time">
+                    <span id="audioCurrentTime">0:00</span>
+                    <span id="audioDuration">0:00</span>
+                </div>
+                <div class="audio-controls">
+                    <button id="replayBtn" class="btn-icon-sm" aria-label="Replay from beginning" title="Replay">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="1 4 1 10 7 10"/>
+                            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                        </svg>
+                    </button>
+                    <button id="playPauseBtn" class="btn-play" aria-label="Play audio">
+                        <svg id="playIcon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        <svg id="pauseIcon" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                        </svg>
+                    </button>
+                    <button id="stopAudioBtn" class="btn-icon-sm" aria-label="Stop playback" title="Stop">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="6" y="6" width="12" height="12" rx="1"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="speed-control">
+                    <label for="speedSelect" class="speed-label">Speed:</label>
+                    <select id="speedSelect" class="speed-select" aria-label="Speech speed">
+                        <option value="slow">Slow</option>
+                        <option value="normal" selected>Normal</option>
+                        <option value="fast">Fast</option>
+                    </select>
+                </div>
+            </div>
+        </main>
+
+    </div>
+
+    <!-- Hidden canvas for capturing camera frames -->
+    <canvas id="captureCanvas" style="display: none;" aria-hidden="true"></canvas>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
