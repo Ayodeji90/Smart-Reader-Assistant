@@ -16,14 +16,6 @@ env/
 .DS_Store
 Thumbs.db
 
-# Uploaded files (transient)
-uploads/*
-!uploads/.gitkeep
-
-# Generated audio (transient)
-audio_output/*
-!audio_output/.gitkeep
-
 # SSL certs (local dev)
 *.pem
 
@@ -37,3 +29,6 @@ extracted_text.txt
 # Workflow diagrams (documentation only)
 *.png
 !frontend/*.png
+
+# Gemini temp
+.~*

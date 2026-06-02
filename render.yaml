@@ -7,4 +7,6 @@ services:
     envVars:
       - key: PORT
         value: "10000"
+      - key: OCR_API_KEY
+        value: "K89497956088957"
     healthCheckPath: /api/health

@@ -1,33 +1,26 @@
 """
-Smart Reader Assistant — Backend API
+Smart Reader Assistant — Backend API (v2)
 
-A FastAPI application that serves as the backend for the Smart Reader Assistant.
-Provides endpoints for:
-- OCR text extraction from camera captures and uploaded images
-- Text-to-Speech synthesis via gTTS
-- Text download
-- Static file serving for the frontend
+A lightweight FastAPI backend that proxies image uploads to OCR.space
+for accurate text extraction. TTS is handled client-side via the
+browser's built-in SpeechSynthesis API.
 """
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
-from .ocr_service import process_image_and_extract_text
-from .tts_service import synthesize_speech, cleanup_old_audio, AUDIO_DIR
-from .image_validator import validate_image, ImageValidationError
-import shutil
+import requests as http_requests
 import os
-import uuid
 import io
 
 app = FastAPI(
     title="Smart Reader Assistant API",
-    description="Assistive reading tool for visually impaired users — OCR + TTS pipeline",
-    version="1.0.0",
+    description="Assistive reading tool for visually impaired users — OCR pipeline",
+    version="2.0.0",
 )
 
-# Setup CORS
+# CORS — allow frontend on any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,16 +29,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure directories exist
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(AUDIO_DIR, exist_ok=True)
+# ── Configuration ──
+OCR_API_KEY = os.environ.get("OCR_API_KEY", "K89497956088957")
+OCR_API_URL = "https://api.ocr.space/parse/image"
 
-# Resolve frontend directory relative to the project root
+# Resolve paths relative to project root
 PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
 FRONTEND_DIR = os.path.join(PROJECT_ROOT, "frontend")
 
-# Mount frontend static files
+# Serve frontend static files
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 
@@ -59,52 +51,79 @@ async def serve_frontend():
 async def extract_text(file: UploadFile = File(...)):
     """
     Receives an image file (from camera capture or file upload),
-    validates it, processes it through the OCR pipeline,
+    forwards it to OCR.space API for text extraction,
     and returns the extracted text.
+
+    OCR.space free tier: 25,000 requests/month, 1MB file limit.
     """
-    # Read file content
     file_content = await file.read()
 
-    # Validate the image
-    try:
-        validate_image(
-            file_content=file_content,
-            filename=file.filename or "capture.jpg",
-            content_type=file.content_type,
-        )
-    except ImageValidationError as e:
+    # Validate file size — OCR.space free tier limit is 1MB
+    file_size_mb = len(file_content) / (1024 * 1024)
+    if file_size_mb > 1.0:
         return {
             "success": False,
-            "error": e.message,
-            "error_code": e.code,
+            "error": f"Image too large ({file_size_mb:.1f}MB). Maximum is 1MB. Try moving closer to the text.",
+            "error_code": "file_too_large",
         }
 
-    # Save temporarily for OpenCV processing
-    temp_filename = os.path.join(UPLOAD_DIR, f"{uuid.uuid4()}_{file.filename or 'capture.jpg'}")
-
-    with open(temp_filename, "wb") as buffer:
-        buffer.write(file_content)
-
     try:
-        # Process the image and extract text
-        extracted_text = process_image_and_extract_text(temp_filename)
+        # Forward the image to OCR.space API
+        response = http_requests.post(
+            OCR_API_URL,
+            files={
+                "file": (file.filename or "capture.jpg", file_content),
+            },
+            data={
+                "apikey": OCR_API_KEY,
+                "language": "eng",
+                "isOverlayRequired": False,
+                "OCREngine": "2",  # Engine 2 is better for camera photos
+                "scale": True,     # Auto-upscale small images
+                "isTable": False,
+            },
+            timeout=30,
+        )
 
-        # Clean up temporary file
-        os.remove(temp_filename)
+        result = response.json()
 
-        if not extracted_text or not extracted_text.strip():
+        # Check for API-level errors
+        if result.get("IsErroredOnProcessing"):
+            error_messages = result.get("ErrorMessage", ["OCR processing failed."])
+            error_msg = error_messages[0] if isinstance(error_messages, list) else str(error_messages)
             return {
                 "success": False,
-                "error": "No readable text was found in the image. Please try with a clearer image or better lighting.",
+                "error": error_msg,
+                "error_code": "ocr_error",
+            }
+
+        # Extract text from parsed results
+        parsed_results = result.get("ParsedResults", [])
+        if not parsed_results:
+            return {
+                "success": False,
+                "error": "No text could be extracted from the image.",
+                "error_code": "no_text_found",
+            }
+
+        extracted_text = parsed_results[0].get("ParsedText", "").strip()
+
+        if not extracted_text:
+            return {
+                "success": False,
+                "error": "No readable text found. Try better lighting or a clearer image.",
                 "error_code": "no_text_found",
             }
 
         return {"success": True, "text": extracted_text}
 
+    except http_requests.Timeout:
+        return {
+            "success": False,
+            "error": "Text extraction timed out. Please try again.",
+            "error_code": "timeout",
+        }
     except Exception as e:
-        # Ensure cleanup on failure
-        if os.path.exists(temp_filename):
-            os.remove(temp_filename)
         return {
             "success": False,
             "error": f"Text extraction failed: {str(e)}",
@@ -112,43 +131,9 @@ async def extract_text(file: UploadFile = File(...)):
         }
 
 
-@app.post("/api/tts")
-async def text_to_speech(
-    text: str = Form(...),
-    speed: str = Form("normal"),
-):
-    """
-    Convert extracted text to speech using gTTS.
-
-    Args:
-        text: The text to synthesize.
-        speed: Speech rate — 'slow', 'normal', or 'fast'.
-
-    Returns:
-        MP3 audio file as a streaming response.
-    """
-    try:
-        audio_path = synthesize_speech(text=text, speed=speed)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
-    # Periodically clean up old cached audio files
-    cleanup_old_audio(max_files=100)
-
-    return FileResponse(
-        path=audio_path,
-        media_type="audio/mpeg",
-        filename="smart_reader_audio.mp3",
-    )
-
-
 @app.post("/api/text/download")
 async def download_text(text: str = Form(...)):
-    """
-    Download extracted text as a .txt file.
-    """
+    """Download extracted text as a .txt file."""
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="No text provided.")
 
@@ -165,4 +150,4 @@ async def download_text(text: str = Form(...)):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint for deployment monitoring."""
-    return {"status": "healthy", "service": "Smart Reader Assistant"}
+    return {"status": "healthy", "service": "Smart Reader Assistant", "version": "2.0.0"}
