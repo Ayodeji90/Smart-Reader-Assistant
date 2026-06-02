@@ -553,7 +553,7 @@ header p {
 }
 
 .scroll-area {
-    max-height: 200px;
+    max-height: 400px;
     overflow-y: auto;
     padding-right: 4px;
 }
@@ -576,6 +576,9 @@ header p {
     white-space: pre-wrap;
     color: var(--text-primary);
     line-height: 1.7;
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
 }
 
 /* --- Audio Player --- */
